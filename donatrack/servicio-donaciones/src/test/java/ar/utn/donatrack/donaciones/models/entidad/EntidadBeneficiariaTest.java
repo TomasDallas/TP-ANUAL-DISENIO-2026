@@ -1,0 +1,205 @@
+package ar.utn.donatrack.donaciones.models.entidad;
+
+import ar.utn.donatrack.donaciones.models.contacto.Email;
+import ar.utn.donatrack.donaciones.models.contacto.MedioDeContacto;
+import ar.utn.donatrack.donaciones.models.contacto.Telefono;
+import ar.utn.donatrack.donaciones.models.entidad.necesidad.Campania;
+import ar.utn.donatrack.donaciones.models.entidad.necesidad.Necesidad;
+import ar.utn.donatrack.donaciones.models.entidad.necesidad.NecesidadExtraordinaria;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Tests de EntidadBeneficiaria (modelo rico).
+ *
+ * La entidad es la dueña de sus campañas: sabe agregarlas, agregarles necesidades
+ * y contar cuántas necesidades compatibles tiene con una subcategoría dada.
+ * Ese conteo es la entrada del algoritmo de asignación "por afinidad".
+ *
+ * También expone obtenerEmail(), que busca el canal EMAIL entre sus medios de
+ * contacto: es el que usa el servicio para notificarle inicios de ruta y entregas.
+ */
+@DisplayName("EntidadBeneficiaria - comportamiento del modelo rico")
+class EntidadBeneficiariaTest {
+
+    private EntidadBeneficiaria entidad;
+
+    @BeforeEach
+    void crearEntidad() {
+        entidad = EntidadBeneficiaria.builder()
+                .id(UUID.randomUUID())
+                .razonSocial("Comedor Los Pibes")
+                .contactos(new ArrayList<>())
+                .build();
+    }
+
+    /** Campaña vacía con id propio, lista para recibir necesidades. */
+    private Campania campaniaVacia(String descripcion) {
+        Campania campania = new Campania();
+        campania.setIdCampania(UUID.randomUUID());
+        campania.setIdEntidad(entidad.getId());
+        campania.setDescripcionGeneral(descripcion);
+        campania.setFechaInicio(LocalDate.of(2026, 3, 1));
+        campania.setFechaFin(LocalDate.of(2026, 4, 1));
+        return campania;
+    }
+
+    private Necesidad necesidad(String nombre, String descripcion) {
+        NecesidadExtraordinaria necesidad = new NecesidadExtraordinaria();
+        necesidad.setNombre(nombre);
+        necesidad.setDescripcion(descripcion);
+        necesidad.setCantidadObjetivo(100);
+        return necesidad;
+    }
+
+    @Nested
+    @DisplayName("Gestión de campañas")
+    class GestionDeCampanias {
+
+        @Test
+        @DisplayName("Una entidad recién creada arranca sin campañas (lista vacía, no null)")
+        void arrancaSinCampanias() {
+            assertThat(entidad.getCampanias()).isNotNull().isEmpty();
+        }
+
+        @Test
+        @DisplayName("agregarCampania() suma la campaña a la entidad")
+        void agregarCampania() {
+            entidad.agregarCampania(campaniaVacia("Colecta post inundación"));
+
+            assertThat(entidad.getCampanias()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("agregarNecesidadACampania() agrega la necesidad a la campaña correcta")
+        void agregarNecesidadALaCampaniaCorrecta() {
+            // Se buscan las campañas por idCampania, así que hay que verificar que
+            // la necesidad no termine en la campaña equivocada.
+            Campania inundacion = campaniaVacia("Colecta post inundación");
+            Campania invierno = campaniaVacia("Campaña de invierno");
+            entidad.agregarCampania(inundacion);
+            entidad.agregarCampania(invierno);
+
+            entidad.agregarNecesidadACampania(inundacion, necesidad("Colchones", "Colchones de una plaza"));
+
+            assertThat(inundacion.getNecesidades()).hasSize(1);
+            assertThat(invierno.getNecesidades()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Agregar una necesidad a una campaña que no pertenece a la entidad no hace nada")
+        void campaniaAjenaNoHaceNada() {
+            // Caso borde: la implementación usa ifPresent, así que no debe explotar,
+            // simplemente ignora la operación.
+            Campania campaniaAjena = campaniaVacia("Campaña de otra entidad");
+
+            entidad.agregarNecesidadACampania(campaniaAjena, necesidad("Arroz", "Bolsas de arroz"));
+
+            assertThat(entidad.getCampanias()).isEmpty();
+            assertThat(campaniaAjena.getNecesidades()).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("contarNecesidadesCompatiblesCon() - insumo del algoritmo de asignación")
+    class ContarNecesidadesCompatibles {
+
+        @Test
+        @DisplayName("Cuenta las necesidades compatibles a lo largo de TODAS las campañas")
+        void cuentaEnTodasLasCampanias() {
+            // El puntaje de afinidad de una entidad no mira una sola campaña:
+            // suma todas las necesidades abiertas que matcheen la subcategoría.
+            Campania primera = campaniaVacia("Colecta post inundación");
+            Campania segunda = campaniaVacia("Campaña permanente");
+            entidad.agregarCampania(primera);
+            entidad.agregarCampania(segunda);
+
+            entidad.agregarNecesidadACampania(primera, necesidad("Arroz", "Bolsas de arroz"));
+            entidad.agregarNecesidadACampania(primera, necesidad("Colchones", "Colchones de una plaza"));
+            entidad.agregarNecesidadACampania(segunda, necesidad("Más arroz", "Arroz para el guiso"));
+
+            assertThat(entidad.contarNecesidadesCompatiblesCon("arroz")).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("Devuelve 0 cuando ninguna necesidad coincide")
+        void ceroSiNoHayCoincidencias() {
+            Campania campania = campaniaVacia("Colecta post inundación");
+            entidad.agregarCampania(campania);
+            entidad.agregarNecesidadACampania(campania, necesidad("Colchones", "Colchones de una plaza"));
+
+            assertThat(entidad.contarNecesidadesCompatiblesCon("arroz")).isZero();
+        }
+
+        @Test
+        @DisplayName("Devuelve 0 cuando la entidad no tiene ninguna campaña")
+        void ceroSinCampanias() {
+            assertThat(entidad.contarNecesidadesCompatiblesCon("arroz")).isZero();
+        }
+
+        @Test
+        @DisplayName("El conteo ignora mayúsculas y minúsculas")
+        void conteoIgnoraCase() {
+            Campania campania = campaniaVacia("Colecta post inundación");
+            entidad.agregarCampania(campania);
+            entidad.agregarNecesidadACampania(campania, necesidad("Arroz", "Bolsas de arroz"));
+
+            assertThat(entidad.contarNecesidadesCompatiblesCon("ARROZ")).isEqualTo(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("obtenerEmail() - canal para notificar a la entidad")
+    class ObtenerEmail {
+
+        @Test
+        @DisplayName("Devuelve el valor del contacto de tipo Email")
+        void devuelveElEmail() {
+            entidad.setContactos(List.of(
+                    Telefono.builder().valor("1155667788").build(),
+                    Email.builder().valor("comedor@lospibes.org").build()
+            ));
+
+            assertThat(entidad.obtenerEmail()).isEqualTo("comedor@lospibes.org");
+        }
+
+        @Test
+        @DisplayName("Devuelve null si la entidad no tiene ningún contacto de tipo Email")
+        void sinEmailDevuelveNull() {
+            // El service usa este null para saltear la notificación en lugar de
+            // fallar toda la operación logística.
+            entidad.setContactos(List.of(Telefono.builder().valor("1155667788").build()));
+
+            assertThat(entidad.obtenerEmail()).isNull();
+        }
+
+        @Test
+        @DisplayName("Devuelve null si la lista de contactos es null")
+        void contactosNullDevuelveNull() {
+            entidad.setContactos(null);
+
+            assertThat(entidad.obtenerEmail()).isNull();
+        }
+
+        @Test
+        @DisplayName("Si hay varios emails devuelve el primero")
+        void variosEmailsDevuelveElPrimero() {
+            List<MedioDeContacto> contactos = List.of(
+                    Email.builder().valor("principal@lospibes.org").build(),
+                    Email.builder().valor("secundario@lospibes.org").build()
+            );
+            entidad.setContactos(contactos);
+
+            assertThat(entidad.obtenerEmail()).isEqualTo("principal@lospibes.org");
+        }
+    }
+}

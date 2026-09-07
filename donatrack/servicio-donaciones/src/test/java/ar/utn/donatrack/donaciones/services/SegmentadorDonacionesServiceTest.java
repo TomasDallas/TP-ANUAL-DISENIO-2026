@@ -1,141 +1,202 @@
-/*
 package ar.utn.donatrack.donaciones.services;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import ar.utn.donatrack.donaciones.clientes.IncentivosClient;
+import ar.utn.donatrack.donaciones.interfaces.repositories.DonacionesRepositoryInterface;
+import ar.utn.donatrack.donaciones.interfaces.repositories.PersonaDonanteRepositoryInterface;
 import ar.utn.donatrack.donaciones.models.categoria.Subcategoria;
 import ar.utn.donatrack.donaciones.models.donacion.CargaDonacion;
-import ar.utn.donatrack.donaciones.models.donacion.DonacionPerecible;
-import ar.utn.donatrack.donaciones.models.donacion.bien.BienConEstado;
-import ar.utn.donatrack.donaciones.models.donacion.bien.BienPerecible;
-import ar.utn.donatrack.donaciones.repositories.SegmentadorDonacionesRepository;
-import org.junit.jupiter.api.BeforeEach;
+import ar.utn.donatrack.donaciones.models.donacion.Donacion;
+import ar.utn.donatrack.donaciones.models.donacion.bien.Bien;
+import ar.utn.donatrack.donaciones.models.donacion.bien.BienGenerico;
+import ar.utn.donatrack.donaciones.models.donante.PersonaDonante;
+import ar.utn.donatrack.donaciones.models.donante.PersonaHumana;
+import ar.utn.donatrack.donaciones.models.donante.estado.ActivoState;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+/**
+ * Tests del servicio que registra una carga de donación.
+ *
+ * Su responsabilidad es de orquestación, no de reglas de negocio: delega la
+ * segmentación en el modelo (CargaDonacion.segmentar(), probado en
+ * CargaDonacionTest), persiste el resultado y avisa al servicio de incentivos
+ * para que actualice métricas y misiones del donante.
+ *
+ * Lo que se verifica acá es justamente esa coordinación: que se persista lo
+ * segmentado, que se notifique con los datos correctos y —muy importante— que
+ * la notificación se omita sin romper cuando falta el donante o su email.
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("SegmentadorDonacionesService - registro de una carga de donación")
 class SegmentadorDonacionesServiceTest {
 
-  private final SegmentadorDonacionesRepository repository = new SegmentadorDonacionesRepository();
-  private final SegmentadorDonacionesService segmentador = new SegmentadorDonacionesService(repository);
-  private final Subcategoria subRopa = new Subcategoria("Ropa");
-  private final Subcategoria subAlimento = new Subcategoria("Alimento");
+    @Mock
+    private DonacionesRepositoryInterface donacionesRepository;
 
-  BienPerecible bienPerecible = BienPerecible.builder()
-      .subcategoria(subAlimento)
-      .descripcion("Leche larga vida")
-      .foto("path/to/leche.jpg")
-      .cantidad(10)
-      .unidad("unidades")
-      .fechaVencimiento(LocalDate.of(2025, 1, 1))
-      .build();
-  BienPerecible bienPerecible2 = BienPerecible.builder()
-      .subcategoria(subAlimento)
-      .descripcion("Arroz")
-      .foto("path/to/arroz.jpg")
-      .cantidad(5)
-      .unidad("kg")
-      .fechaVencimiento(LocalDate.of(2025, 1, 1))
-      .build();
-  BienPerecible bienPerecible3 = BienPerecible.builder()
-      .subcategoria(subAlimento)
-      .descripcion("Queso")
-      .foto("path/to/queso.jpg")
-      .cantidad(2)
-      .unidad("unidades")
-      .fechaVencimiento(LocalDate.of(2025, 2, 1))
-      .build();
-  BienConEstado bienConEstado = BienConEstado.builder()
-      .subcategoria(subRopa)
-      .descripcion("Remera")
-      .foto("path/to/remera.jpg")
-      .cantidad(5)
-      .unidad("unidades")
-      .esNuevo(true)
-      .build();
-  BienConEstado bienConEstado2 = BienConEstado.builder()
-      .subcategoria(subRopa)
-      .descripcion("Pantalon")
-      .foto("path/to/pantalon.jpg")
-      .cantidad(3)
-      .unidad("unidades")
-      .esNuevo(false)
-      .build();
-  BienConEstado bienConEstado3 = BienConEstado.builder()
-      .subcategoria(subRopa)
-      .descripcion("Camisa")
-      .foto("path/to/camisa.jpg")
-      .cantidad(4)
-      .unidad("unidades")
-      .esNuevo(true)
-      .build();
+    @Mock
+    private PersonaDonanteRepositoryInterface donanteRepository;
 
-  @BeforeEach
-  void beforeEach() {
-    this.repository.getDonaciones().clear();
-  }
+    @Mock
+    private IncentivosClient incentivosClient;
 
-  @Test
-  void listaVacia_retornaListaVacia() {
-    CargaDonacion carga = new CargaDonacion();
-    carga.setBienes(List.of());
+    @InjectMocks
+    private SegmentadorDonacionesService servicio;
 
-    this.segmentador.segmentar(carga);
+    @Captor
+    private ArgumentCaptor<List<Donacion>> donacionesCaptor;
 
-    assertTrue(this.repository.getDonaciones().isEmpty());
-  }
+    @Captor
+    private ArgumentCaptor<List<String>> categoriasCaptor;
 
-  @Test
-  void dosPereciblesMismaFecha_retornaUnaDonacion() {
-    CargaDonacion carga = new CargaDonacion();
+    private final UUID idDonante = UUID.randomUUID();
 
-    carga.setBienes(List.of(bienPerecible, bienPerecible2));
+    private Bien bien(String subcategoria, String descripcion) {
+        return BienGenerico.builder()
+                .subcategoria(new Subcategoria(subcategoria))
+                .descripcion(descripcion)
+                .cantidad(1)
+                .unidad("unidades")
+                .build();
+    }
 
-    this.segmentador.segmentar(carga);
+    private PersonaDonante donanteConEmail(String email) {
+        return PersonaHumana.builder()
+                .id(idDonante)
+                .nombre("Juan")
+                .email(email)
+                .estado(new ActivoState())
+                .build();
+    }
 
-    assertEquals(1, this.repository.getDonaciones().size());
-    assertEquals(bienPerecible.getFechaVencimiento(), ((DonacionPerecible) this.repository.getDonaciones().getFirst()).getFechaVencimiento());
-    assertEquals(2, (this.repository.getDonaciones().getFirst().getBienes().size()));
-  }
+    @Nested
+    @DisplayName("Segmentación y persistencia")
+    class SegmentacionYPersistencia {
 
-  @Test
-  void dosPereciblesFechasDistintas_retornaDosDoaciones() {
-    CargaDonacion carga = new CargaDonacion();
-    carga.setBienes(List.of(bienPerecible, bienPerecible3));
+        @Test
+        @DisplayName("Devuelve las donaciones segmentadas a partir de la carga")
+        void devuelveLasDonacionesSegmentadas() {
+            CargaDonacion carga = new CargaDonacion(idDonante, "Colecta",
+                    List.of(bien("arroz", "Arroz"), bien("ropa", "Camperas")));
+            when(donanteRepository.obtenerPersona(idDonante)).thenReturn(donanteConEmail("juan@example.com"));
 
-    this.segmentador.segmentar(carga);
+            List<Donacion> resultado = servicio.segmentar(carga);
 
-    assertEquals(2, this.repository.getDonaciones().size());
-    assertEquals(1, (this.repository.getDonaciones().getFirst().getBienes().size()));
-    assertEquals(1, (this.repository.getDonaciones().get(1).getBienes().size()));
-  }
+            assertThat(resultado)
+                    .hasSize(2)
+                    .extracting(d -> d.getSubcategoria().getTipo())
+                    .containsExactlyInAnyOrder("arroz", "ropa");
+        }
 
-  @Test
-  void bienesConEstado_retornaUnaDonacionPorEstado() {
-    CargaDonacion carga = new CargaDonacion();
-    carga.setBienes(List.of(bienConEstado, bienConEstado2, bienConEstado3));
+        @Test
+        @DisplayName("Persiste exactamente las donaciones que devolvió la segmentación")
+        void persisteLoSegmentado() {
+            // Verificación clave: el repositorio recibe las mismas instancias que
+            // se devuelven al controller, no una copia distinta.
+            CargaDonacion carga = new CargaDonacion(idDonante, "Colecta",
+                    List.of(bien("arroz", "Arroz"), bien("ropa", "Camperas")));
+            when(donanteRepository.obtenerPersona(idDonante)).thenReturn(donanteConEmail("juan@example.com"));
 
-    this.segmentador.segmentar(carga);
+            List<Donacion> resultado = servicio.segmentar(carga);
 
-    assertEquals(2, this.repository.getDonaciones().size());
-    assertTrue(this.repository.getDonaciones().getFirst().getBienes().stream().allMatch(b -> ((BienConEstado) b).isEsNuevo()));
-    assertEquals(2, (this.repository.getDonaciones().getFirst().getBienes().size()));
-    assertEquals(1, (this.repository.getDonaciones().get(1).getBienes().size()));
-  }
+            verify(donacionesRepository).cargarDonaciones(donacionesCaptor.capture());
+            assertThat(donacionesCaptor.getValue()).isEqualTo(resultado);
+        }
 
-  @Test
-  void subcategoriasDistintas_generaDonacionesSeparadas() {
-    CargaDonacion carga = new CargaDonacion();
-    carga.setBienes(List.of(bienPerecible, bienConEstado, bienPerecible2, bienConEstado2, bienPerecible3, bienConEstado3));
+        @Test
+        @DisplayName("Una carga sin bienes no persiste nada ni falla")
+        void cargaVaciaNoRompe() {
+            CargaDonacion carga = new CargaDonacion(idDonante, "Colecta vacía", List.of());
+            when(donanteRepository.obtenerPersona(idDonante)).thenReturn(donanteConEmail("juan@example.com"));
 
-    this.segmentador.segmentar(carga);
+            List<Donacion> resultado = servicio.segmentar(carga);
 
-    assertEquals(4, this.repository.getDonaciones().size());
-    assertEquals(2, (this.repository.getDonaciones().getFirst().getBienes().size()));
-    assertEquals(1, (this.repository.getDonaciones().get(1).getBienes().size()));
-    assertEquals(2, (this.repository.getDonaciones().get(2).getBienes().size()));
-    assertEquals(1, (this.repository.getDonaciones().get(3).getBienes().size()));
-  }
-}*/
+            assertThat(resultado).isEmpty();
+            verify(donacionesRepository).cargarDonaciones(List.of());
+        }
+    }
+
+    @Nested
+    @DisplayName("Notificación a incentivos")
+    class NotificacionAIncentivos {
+
+        @Test
+        @DisplayName("Notifica a incentivos con el email del donante, la cantidad de bienes y las categorías")
+        void notificaConLosDatosCorrectos() {
+            // Incentivos usa estos datos para actualizar métricas y verificar
+            // si el donante completó alguna misión.
+            CargaDonacion carga = new CargaDonacion(idDonante, "Colecta",
+                    List.of(bien("arroz", "Arroz"), bien("ropa", "Camperas")));
+            when(donanteRepository.obtenerPersona(idDonante)).thenReturn(donanteConEmail("juan@example.com"));
+
+            servicio.segmentar(carga);
+
+            verify(incentivosClient).notificarDonacionRegistrada(
+                    eq(idDonante), eq("juan@example.com"), eq("EMAIL"), eq(2), categoriasCaptor.capture());
+            assertThat(categoriasCaptor.getValue()).containsExactlyInAnyOrder("arroz", "ropa");
+        }
+
+        @Test
+        @DisplayName("Las categorías notificadas no se repiten aunque haya varios bienes de la misma subcategoría")
+        void categoriasSinDuplicados() {
+            CargaDonacion carga = new CargaDonacion(idDonante, "Colecta",
+                    List.of(bien("arroz", "Arroz A"), bien("arroz", "Arroz B"), bien("ropa", "Camperas")));
+            when(donanteRepository.obtenerPersona(idDonante)).thenReturn(donanteConEmail("juan@example.com"));
+
+            servicio.segmentar(carga);
+
+            // 3 bienes en total, pero solo 2 categorías distintas.
+            verify(incentivosClient).notificarDonacionRegistrada(
+                    eq(idDonante), anyString(), anyString(), eq(3), categoriasCaptor.capture());
+            assertThat(categoriasCaptor.getValue()).containsExactlyInAnyOrder("arroz", "ropa");
+        }
+
+        @Test
+        @DisplayName("Si el donante no existe, la donación se registra igual y NO se notifica")
+        void donanteInexistenteNoRompe() {
+            // Regla de resiliencia: el aviso a incentivos es secundario; nunca debe
+            // hacer fallar el registro de una donación que ya se persistió.
+            CargaDonacion carga = new CargaDonacion(idDonante, "Colecta", List.of(bien("arroz", "Arroz")));
+            when(donanteRepository.obtenerPersona(idDonante)).thenReturn(null);
+
+            List<Donacion> resultado = servicio.segmentar(carga);
+
+            assertThat(resultado).hasSize(1);
+            verify(donacionesRepository).cargarDonaciones(anyList());
+            verifyNoInteractions(incentivosClient);
+        }
+
+        @Test
+        @DisplayName("Si el donante no tiene email, la donación se registra igual y NO se notifica")
+        void donanteSinEmailNoNotifica() {
+            CargaDonacion carga = new CargaDonacion(idDonante, "Colecta", List.of(bien("arroz", "Arroz")));
+            when(donanteRepository.obtenerPersona(idDonante)).thenReturn(donanteConEmail(null));
+
+            List<Donacion> resultado = servicio.segmentar(carga);
+
+            assertThat(resultado).hasSize(1);
+            verify(incentivosClient, never()).notificarDonacionRegistrada(
+                    any(), anyString(), anyString(), anyInt(), anyList());
+        }
+    }
+}
