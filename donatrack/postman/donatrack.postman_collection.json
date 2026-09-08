@@ -2059,6 +2059,10 @@
                   {
                     "key": "Content-Type",
                     "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "{{tokenCorrelacion}}"
                   }
                 ],
                 "url": {
@@ -2073,10 +2077,10 @@
                     "callback"
                   ]
                 },
-                "description": "",
+                "description": "El token de correlación va en el header Authorization, no en el body.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"loteId\": \"{{loteId}}\",\n  \"tokenCorrelacion\": \"{{tokenCorrelacion}}\",\n  \"rutas\": [\n    {\n      \"camionId\": \"{{camionId}}\",\n      \"paradas\": [\n        {\n          \"orden\": 1,\n          \"idEntidadBeneficiaria\": \"{{logisticaEntidadId}}\",\n          \"direccion\": {\n            \"calle\": \"Medrano\",\n            \"numero\": 951,\n            \"localidad\": \"CABA\",\n            \"provincia\": \"Buenos Aires\",\n            \"codigoPostal\": \"C1179\"\n          },\n          \"donacionesIds\": [\n            \"{{logisticaDonacionId}}\"\n          ]\n        }\n      ]\n    }\n  ]\n}",
+                  "raw": "{\n  \"loteId\": \"{{loteId}}\",\n  \"rutas\": [\n    {\n      \"camionId\": \"{{camionId}}\",\n      \"paradas\": [\n        {\n          \"orden\": 1,\n          \"idEntidadBeneficiaria\": \"{{logisticaEntidadId}}\",\n          \"direccion\": {\n            \"calle\": \"Medrano\",\n            \"numero\": 951,\n            \"localidad\": \"CABA\",\n            \"provincia\": \"Buenos Aires\",\n            \"codigoPostal\": \"C1179\"\n          },\n          \"donacionesIds\": [\n            \"{{logisticaDonacionId}}\"\n          ]\n        }\n      ]\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2433,10 +2437,10 @@
                     "planificar"
                   ]
                 },
-                "description": "",
+                "description": "Solicitud síncrona de un solo camión: el mock responde en el mismo request/response con su ruta planificada.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"loteId\": \"{{loteId}}\",\n  \"tokenCorrelacion\": \"{{tokenCorrelacion}}\",\n  \"donaciones\": [\n    {\n      \"idDonacion\": \"{{logisticaDonacionId}}\",\n      \"idEntidadBeneficiaria\": \"{{logisticaEntidadId}}\",\n      \"direccionEntrega\": {\n        \"calle\": \"Medrano\",\n        \"numero\": 951,\n        \"localidad\": \"CABA\",\n        \"provincia\": \"Buenos Aires\",\n        \"codigoPostal\": \"C1179\"\n      }\n    }\n  ],\n  \"camiones\": [\n    {\n      \"id\": \"{{camionId}}\",\n      \"patente\": \"AB123CD\",\n      \"capacidadVolumenM3\": 30,\n      \"alturaM\": 3.2,\n      \"capacidadCargaKg\": 2500\n    }\n  ]\n}",
+                  "raw": "{\n  \"loteId\": \"{{loteId}}\",\n  \"camion\": {\n    \"id\": \"{{camionId}}\",\n    \"patente\": \"AB123CD\",\n    \"capacidadVolumenM3\": 30,\n    \"alturaM\": 3.2,\n    \"capacidadCargaKg\": 2500\n  },\n  \"donaciones\": [\n    {\n      \"idDonacion\": \"{{logisticaDonacionId}}\",\n      \"idEntidadBeneficiaria\": \"{{logisticaEntidadId}}\",\n      \"direccionEntrega\": {\n        \"calle\": \"Medrano\",\n        \"numero\": 951,\n        \"localidad\": \"CABA\",\n        \"provincia\": \"Buenos Aires\",\n        \"codigoPostal\": \"C1179\"\n      }\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"

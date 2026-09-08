@@ -13,9 +13,9 @@ class EntregaValidatorTest {
     private final EntregaValidator validador = new EntregaValidator();
 
     @Test
-    @DisplayName("PENDIENTE -> EN_TRASLADO es válida (inicio de ruta)")
+    @DisplayName("LISTO_PARA_ENTREGAR -> EN_TRASLADO es válida (inicio de ruta)")
     void pendienteAEnTrasladoEsValida() {
-        assertDoesNotThrow(() -> validador.validarTransicion(EstadoEntrega.PENDIENTE, EstadoEntrega.EN_TRASLADO));
+        assertDoesNotThrow(() -> validador.validarTransicion(EstadoEntrega.LISTO_PARA_ENTREGAR, EstadoEntrega.EN_TRASLADO));
     }
 
     @Test
@@ -31,30 +31,30 @@ class EntregaValidatorTest {
     }
 
     @Test
-    @DisplayName("NO_RECIBIDA -> PENDIENTE es válida (regreso a depósito)")
+    @DisplayName("NO_RECIBIDA -> LISTO_PARA_ENTREGAR es válida (regreso a depósito)")
     void noRecibidaAPendienteEsValida() {
-        assertDoesNotThrow(() -> validador.validarTransicion(EstadoEntrega.NO_RECIBIDA, EstadoEntrega.PENDIENTE));
+        assertDoesNotThrow(() -> validador.validarTransicion(EstadoEntrega.NO_RECIBIDA, EstadoEntrega.LISTO_PARA_ENTREGAR));
     }
 
     @Test
     @DisplayName("ENTREGADA es un estado terminal: cualquier transición es inválida")
     void entregadaEsTerminal() {
         assertThrows(TransicionEntregaIlegalException.class,
-                () -> validador.validarTransicion(EstadoEntrega.ENTREGADA, EstadoEntrega.PENDIENTE));
+                () -> validador.validarTransicion(EstadoEntrega.ENTREGADA, EstadoEntrega.LISTO_PARA_ENTREGAR));
     }
 
     @Test
-    @DisplayName("PENDIENTE -> ENTREGADA es inválida: no se puede saltear EN_TRASLADO")
+    @DisplayName("LISTO_PARA_ENTREGAR -> ENTREGADA es inválida: no se puede saltear EN_TRASLADO")
     void pendienteAEntregadaEsInvalida() {
         assertThrows(TransicionEntregaIlegalException.class,
-                () -> validador.validarTransicion(EstadoEntrega.PENDIENTE, EstadoEntrega.ENTREGADA));
+                () -> validador.validarTransicion(EstadoEntrega.LISTO_PARA_ENTREGAR, EstadoEntrega.ENTREGADA));
     }
 
     @Test
-    @DisplayName("EN_TRASLADO -> PENDIENTE es inválida")
+    @DisplayName("EN_TRASLADO -> LISTO_PARA_ENTREGAR es inválida")
     void enTrasladoAPendienteEsInvalida() {
         assertThrows(TransicionEntregaIlegalException.class,
-                () -> validador.validarTransicion(EstadoEntrega.EN_TRASLADO, EstadoEntrega.PENDIENTE));
+                () -> validador.validarTransicion(EstadoEntrega.EN_TRASLADO, EstadoEntrega.LISTO_PARA_ENTREGAR));
     }
 
     @Test

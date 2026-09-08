@@ -165,7 +165,7 @@ regenera la entrega en estado `EN_TRASLADO`.
 
 ## 4. PRUEBA B - Flujo de planificación con el proveedor mock
 
-El backend, al planificar, le envía el lote a un proveedor externo de ruteo. Para no depender de un servidor externo, hay un **mock** dentro de la misma app (`MockProveedorRuteoController`) que escucha en `/ruteo/planificar` y responde OK.
+El backend, al planificar, le pide a un proveedor externo de ruteo que planifique la ruta de cada camión: una llamada síncrona por camión (con las donaciones que le tocan a ese camión), que responde en el mismo request/response con la ruta planificada. Para no depender de un servidor externo, hay un **mock** dentro de la misma app (`MockProveedorRuteoController`) que escucha en `/ruteo/planificar`, agrupa las donaciones recibidas por entidad beneficiaria y devuelve esa ruta.
 La propiedad `integraciones.proveedor-ruteo.url` ya apunta a `http://localhost:8085/ruteo/planificar`.
 
 - Método: **POST**
@@ -194,14 +194,14 @@ La propiedad `integraciones.proveedor-ruteo.url` ya apunta a `http://localhost:8
 
 ### Qué tenés que ver
 
-1. **En Postman:** código `202 Accepted`, con un JSON del lote creado (id, estado, etc.).
+1. **En Postman:** código `200 OK`, con un JSON del lote ya planificado: `estado: "COMPLETADO"` y, dentro de `rutas`, el camión con sus paradas y las entregas creadas en cada una.
 2. **En la consola de Java:** el log del mock:
 
    ```text
-   [MockProveedorRuteoController] Lote recibido para planificar: loteId=..., tokenCorrelacion=..., callbackUrl=http://localhost:8085/api/logistica/planificaciones/callback
+   [MockProveedorRuteoController] Planificando lote=..., camion=..., 1 donaciones
    ```
 
-   Eso demuestra que el backend llamó al proveedor (mock) **sin Connection Refused**.
+   Eso demuestra que el backend llamó al proveedor (mock) **sin Connection Refused** y que la respuesta volvió en el momento.
 
-> Nota: el mock solo loguea y responde OK; no devuelve rutas reales por el callback, así que esta prueba no genera entregas nuevas. Para probar la Prueba A seguí usando la entrega del Seed.
+> Nota: como el mock ya devuelve la ruta planificada de forma síncrona, esta prueba sí genera Ruta/Parada/Entrega reales (en estado `LISTO_PARA_ENTREGAR`), a diferencia de antes.
 

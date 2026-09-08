@@ -150,9 +150,9 @@ class EntregaServiceTest {
         }
 
         @Test
-        @DisplayName("Entrega PENDIENTE no puede confirmarse directamente")
+        @DisplayName("Entrega LISTO_PARA_ENTREGAR no puede confirmarse directamente")
         void noPermiteConfirmarSinIniciarRuta() {
-            Entrega entrega = entregaEnEstado(EstadoEntrega.PENDIENTE);
+            Entrega entrega = entregaEnEstado(EstadoEntrega.LISTO_PARA_ENTREGAR);
             when(repositorio.buscarPorId(entrega.getId())).thenReturn(entrega);
 
             ConfirmarEntregaRequestDTO dto = new ConfirmarEntregaRequestDTO();
@@ -221,14 +221,14 @@ class EntregaServiceTest {
     class RegresarADeposito {
 
         @Test
-        @DisplayName("Entrega NO_RECIBIDA vuelve a PENDIENTE sin disparar eventos")
+        @DisplayName("Entrega NO_RECIBIDA vuelve a LISTO_PARA_ENTREGAR sin disparar eventos")
         void regresaADeposito() {
             Entrega entrega = entregaEnEstado(EstadoEntrega.NO_RECIBIDA);
             when(repositorio.buscarPorId(entrega.getId())).thenReturn(entrega);
 
             service.regresarADeposito(entrega.getId());
 
-            assertEquals(EstadoEntrega.PENDIENTE, entrega.getEstado());
+            assertEquals(EstadoEntrega.LISTO_PARA_ENTREGAR, entrega.getEstado());
             verify(repositorio).guardar(entrega);
             verify(eventPublisher, never()).publicar(any());
             verify(planificacionService, never()).finalizarRutaSiCorresponde(any());
